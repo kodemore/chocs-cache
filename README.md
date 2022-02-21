@@ -3,7 +3,10 @@ Cache middleware for chocs library.
 
 ## Features
 
-Cache your resources easily by just adding `cache` attribute in your route definition.
+- Easy integration
+- Support for ETags
+- Support for conditional request headers `if-none-match`, `if-match`
+- Built-in in-memory cache storage for debugging and testing purposes
 
 ## Installation
 
