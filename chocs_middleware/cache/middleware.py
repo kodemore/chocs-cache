@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Tuple
 
 from chocs import HttpMethod, HttpRequest, HttpResponse, HttpStatus
 from chocs.middleware import Middleware, MiddlewareHandler
@@ -10,7 +11,7 @@ __all__ = ["CacheMiddleware"]
 
 
 class CacheMiddleware(Middleware):
-    def __init__(self, cache_storage: ICacheStorage, cache_vary=("accept", "accept-language")):
+    def __init__(self, cache_storage: ICacheStorage, cache_vary: Tuple[str, ...] = ("accept", "accept-language")):
         self._cache_vary = cache_vary
         self._cache_storage = cache_storage
 

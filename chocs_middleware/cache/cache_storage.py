@@ -88,7 +88,7 @@ class InMemoryCacheStorage(ICacheStorage):
         self._cache[item.item_id] = item
 
 
-def generate_cache_id(request: HttpRequest, cache_vary: Tuple[str] = ("accept", "accept-language")) -> str:
+def generate_cache_id(request: HttpRequest, cache_vary: Tuple[str, ...] = ("accept", "accept-language")) -> str:
     method = request.method
 
     if method in (HttpMethod.GET, HttpMethod.HEAD):
