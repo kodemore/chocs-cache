@@ -103,7 +103,7 @@ class CacheMiddleware(Middleware):
         else:
             cache_vary = response.headers.get("vary")
             if isinstance(cache_vary, str):
-                cache_vary = set([value.strip() for value in cache_vary.split(",")])
+                cache_vary = tuple([value.strip() for value in cache_vary.split(",")])
             cache_id = generate_cache_id(request, cache_vary)
 
         if "etag" in response.headers:
