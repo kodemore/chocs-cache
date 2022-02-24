@@ -1,6 +1,7 @@
 import pytest
 
-from chocs_middleware.cache import InMemoryCacheStorage, CollectableInMemoryCacheStorage, ICacheStorage, CacheItem, CacheError
+from chocs_middleware.cache import InMemoryCacheStorage, CollectableInMemoryCacheStorage, ICacheStorage, CacheItem, \
+    CacheError
 
 
 def test_can_instantiate() -> None:

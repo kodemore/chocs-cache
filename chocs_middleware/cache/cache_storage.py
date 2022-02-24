@@ -7,7 +7,14 @@ from chocs import HttpRequest
 
 from chocs_middleware.cache.error import CacheError
 
-__all__ = ["InMemoryCacheStorage", "CacheItem", "ICacheStorage", "generate_cache_id", "ICollectableCacheStorage", "CollectableInMemoryCacheStorage"]
+__all__ = [
+    "InMemoryCacheStorage",
+    "CacheItem",
+    "ICacheStorage",
+    "generate_cache_id",
+    "ICollectableCacheStorage",
+    "CollectableInMemoryCacheStorage",
+]
 
 
 class CacheItem:
@@ -60,7 +67,7 @@ class CacheItem:
         return self._body != b""
 
     @classmethod
-    def empty(cls, cache_id: str) -> 'CacheItem':
+    def empty(cls, cache_id: str) -> "CacheItem":
         return cls(cache_id, b"", 0)
 
 

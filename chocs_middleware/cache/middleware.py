@@ -15,8 +15,8 @@ class CacheMiddleware(Middleware):
         self,
         cache_storage: ICacheStorage,
         cache_vary: Tuple[str, ...] = ("accept", "accept-language"),
-        safe_methods: Tuple[HttpMethod] = (HttpMethod.GET, HttpMethod.HEAD),
-        successful_responses: Tuple[HttpStatus] = (HttpStatus.OK, HttpStatus.CREATED),
+        safe_methods: Tuple[HttpMethod, ...] = (HttpMethod.GET, HttpMethod.HEAD),
+        successful_responses: Tuple[HttpStatus, ...] = (HttpStatus.OK, HttpStatus.CREATED),
     ):
         self._cache_vary = cache_vary
         self._cache_storage = cache_storage
@@ -117,7 +117,11 @@ class CacheMiddleware(Middleware):
             cache_id = parse_etag_value(response.headers["etag"])
 
             # The cached item's id has changed, we should do the clean-up at this stage.
-            if "etag" in request.headers and cache_item.id != cache_id and isinstance(self._cache_storage, ICollectableCacheStorage):
+            if (
+                "etag" in request.headers
+                and cache_item.id != cache_id
+                and isinstance(self._cache_storage, ICollectableCacheStorage)
+            ):
                 self._cache_storage.collect(cache_item)
 
             # Update cache_id with the provided e-tag

@@ -4,7 +4,7 @@ from chocs import Application
 from chocs import HttpResponse, HttpStatus, HttpRequest, HttpMethod
 
 from chocs_middleware.cache import CacheMiddleware, InMemoryCacheStorage, CollectableInMemoryCacheStorage
-from chocs_middleware.cache.cache_storage import generate_cache_id, CacheItem
+from chocs_middleware.cache.cache_storage import CacheItem
 
 
 def test_can_skip_cache() -> None:
@@ -323,7 +323,7 @@ def test_can_skip_caching_for_non_safe_methods() -> None:
     app = Application(CacheMiddleware(cache))
 
     @app.post("/test", cache_expiry=10)
-    def get_test(req: HttpRequest) -> HttpResponse:
+    def create_test(req: HttpRequest) -> HttpResponse:
         return HttpResponse("test")
 
     # when
