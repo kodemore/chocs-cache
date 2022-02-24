@@ -35,7 +35,7 @@ from chocs_middleware.cache import ICacheStorage, CacheItem, CacheMiddleware
 class MemoryCache(ICacheStorage):
     """
     Custom cache storage that uses memory to store the cache items.
-    In production this should use Redis or other cache database used by your application.
+    In production, this should use Redis or other cache databases used by your application.
     """
 
     def __init__(self):
@@ -63,7 +63,7 @@ def get_user(request: HttpRequest) -> HttpResponse:
 
 ## ETag based cache
 
-To make use of etags simply return etag header in the response, like in the example below:
+To make use of e-tags simply return the e-tag header in the response, like in the example below:
 
 ```python
 import chocs
@@ -80,12 +80,12 @@ def get_user(request: HttpRequest) -> HttpResponse:
     })
 ```
 
-> Keep in mind etag values MUST BE unique per REST endpoint and per content type to avoid cache collisions.
+> Keep in mind e-tag values MUST BE unique per REST endpoint and per content type to avoid cache collisions.
 
 ## Using cache vary
 
-To allow cache system better understand your intention it is recommended to use `cache_vary` attribute.
-You can read more about `Vary` header [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Vary)
+To allow the cache system better understand your intention it is recommended to use the `cache_vary` attribute.
+You can read more about the `Vary` header [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Vary)
 
 ```python
 import chocs
@@ -103,8 +103,8 @@ def get_user(request: HttpRequest) -> HttpResponse:
 
 ## Specifying cache control
 
-You can also specify type of cache by setting `cache_control` attribute to `public` or `private`.
-You can read more about cache control [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching#types_of_caches)
+You can also specify the type of cache by setting the `cache_control` attribute to `public` or `private`.
+You can read more about cache-control [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching#types_of_caches)
 
 ```python
 import chocs
@@ -127,11 +127,11 @@ This means values passed in `if-none-match` and `if-match` headers will be treat
 
 ## Cache revalidation
 
-The middleware provides `ICollectableCache` interfaces that you can use to implement your own 
-cache re-validation. It might be just a simple mechanism which just deletes the stale cache, but
-there are no limitations and more powerful systems might be build on the top of the interface.
+The middleware provides `ICollectableCache` interfaces that you can use to implement your  
+cache re-validation. It might be just a simple mechanism that just deletes the stale cache, but
+there are no limitations and more powerful systems might be built on the top of the interface.
 
-The following diagram represents the way how cache revalidation works in the middleware:
+The following diagram represents the way how to cache revalidation works in the middleware:
 ![Cache Revalidation](./docs/cache_revalidation.png)
 
 
@@ -166,7 +166,7 @@ def get_test(req: HttpRequest) -> HttpResponse:
 @app.patch("/users/{user_id}", cache=True)  # cache attribute enables cache middleware for the endpoint, to collect stale data
 def get_test(req: HttpRequest) -> HttpResponse:
     """
-    Once this function generate successful response and cache exists for given user CacheStorage.collect is called
+    Once this function generate a successful response and cache exists for the given user CacheStorage.collect is called
     """
     return HttpResponse("{user data}")
 ```
