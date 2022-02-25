@@ -1,3 +1,4 @@
+from copy import copy
 from datetime import datetime
 from typing import Tuple
 
@@ -112,6 +113,16 @@ class CacheMiddleware(Middleware):
 
         if "vary" not in response.headers:
             response.headers["vary"] = ",".join(cache_vary)
+
+        # If etag is not present in the response, but vary is being set we need to regenerate cache_id.
+        # And store cached response under the new id.
+        elif "etag" not in response.headers:
+            cache_vary = response.headers.get("vary")
+            if isinstance(cache_vary, str):
+                cache_vary = tuple([value.strip() for value in cache_vary.split(",")])
+            cache_id = generate_cache_id(request, cache_vary)
+            if cache_id != cache_item.id:
+                cache_item = CacheItem.empty(cache_id)
 
         if "etag" in response.headers:
             cache_id = parse_etag_value(response.headers["etag"])

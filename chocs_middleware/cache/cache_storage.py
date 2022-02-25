@@ -1,7 +1,7 @@
 import hashlib
 from abc import abstractmethod
 from datetime import datetime, timedelta
-from typing import Protocol, runtime_checkable, Tuple
+from typing import Protocol, runtime_checkable, Tuple, Iterable
 
 from chocs import HttpRequest
 
@@ -114,7 +114,7 @@ class CollectableInMemoryCacheStorage(InMemoryCacheStorage, ICollectableCacheSto
         del self._cache[item.id]
 
 
-def generate_cache_id(request: HttpRequest, cache_vary: Tuple[str, ...] = ("accept", "accept-language")) -> str:
+def generate_cache_id(request: HttpRequest, cache_vary: Iterable[str] = ("accept", "accept-language")) -> str:
 
     hash_str = f"{request.path}:{request.query_string}"
 
