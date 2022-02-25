@@ -1,17 +1,24 @@
 import hashlib
 from abc import abstractmethod
 from datetime import datetime, timedelta
-from typing import Protocol, runtime_checkable, Tuple
+from typing import Protocol, runtime_checkable, Tuple, Iterable
 
-from chocs import HttpRequest, HttpMethod
+from chocs import HttpRequest
 
 from chocs_middleware.cache.error import CacheError
 
-__all__ = ["InMemoryCacheStorage", "CacheItem", "ICacheStorage", "generate_cache_id"]
+__all__ = [
+    "InMemoryCacheStorage",
+    "CacheItem",
+    "ICacheStorage",
+    "generate_cache_id",
+    "ICollectableCacheStorage",
+    "CollectableInMemoryCacheStorage",
+]
 
 
 class CacheItem:
-    _item_id: str
+    _id: str
     _body: bytes
     ttl: int
     _created_at: datetime
@@ -19,7 +26,7 @@ class CacheItem:
     _expires_at: datetime
 
     def __init__(self, item_id: str, body: bytes, ttl: int = 30):
-        self._item_id = item_id
+        self._id = item_id
         self._body = body
         self.ttl = ttl
         self._created_at = datetime.utcnow()
@@ -27,8 +34,8 @@ class CacheItem:
         self._expires_at = self.updated_at + timedelta(0, self.ttl)
 
     @property
-    def item_id(self) -> str:
-        return self._item_id
+    def id(self) -> str:
+        return self._id
 
     @property
     def is_expired(self) -> bool:
@@ -60,7 +67,7 @@ class CacheItem:
         return self._body != b""
 
     @classmethod
-    def empty(cls, cache_id: str) -> 'CacheItem':
+    def empty(cls, cache_id: str) -> "CacheItem":
         return cls(cache_id, b"", 0)
 
 
@@ -75,6 +82,13 @@ class ICacheStorage(Protocol):
         ...
 
 
+@runtime_checkable
+class ICollectableCacheStorage(ICacheStorage, Protocol):
+    @abstractmethod
+    def collect(self, item: CacheItem) -> None:
+        ...
+
+
 class InMemoryCacheStorage(ICacheStorage):
     def __init__(self):
         self._cache = {}
@@ -85,16 +99,24 @@ class InMemoryCacheStorage(ICacheStorage):
         raise CacheError.for_not_found(item_id)
 
     def set(self, item: CacheItem) -> None:
-        self._cache[item.item_id] = item
+        self._cache[item.id] = item
+
+    @property
+    def is_empty(self) -> bool:
+        return len(self) <= 0
+
+    def __len__(self) -> int:
+        return len(self._cache)
 
 
-def generate_cache_id(request: HttpRequest, cache_vary: Tuple[str, ...] = ("accept", "accept-language")) -> str:
-    method = request.method
+class CollectableInMemoryCacheStorage(InMemoryCacheStorage, ICollectableCacheStorage):
+    def collect(self, item: CacheItem) -> None:
+        del self._cache[item.id]
 
-    if method in (HttpMethod.GET, HttpMethod.HEAD):
-        method = HttpMethod.GET
 
-    hash_str = f"{method}:{request.path}:{request.query_string}"
+def generate_cache_id(request: HttpRequest, cache_vary: Iterable[str] = ("accept", "accept-language")) -> str:
+
+    hash_str = f"{request.path}:{request.query_string}"
 
     for header in cache_vary:
         hash_str += "".join(request.headers.get(header))

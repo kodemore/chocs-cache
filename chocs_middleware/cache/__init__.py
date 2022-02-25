@@ -1,3 +1,9 @@
-from .cache_storage import CacheItem, ICacheStorage, InMemoryCacheStorage
-from .middleware import CacheMiddleware
+from .cache_storage import (
+    CacheItem,
+    ICacheStorage,
+    ICollectableCacheStorage,
+    InMemoryCacheStorage,
+    CollectableInMemoryCacheStorage,
+)
 from .error import CacheError
+from .middleware import CacheMiddleware

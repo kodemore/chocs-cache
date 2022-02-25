@@ -1,28 +1,38 @@
+from copy import copy
 from datetime import datetime
 from typing import Tuple
 
 from chocs import HttpMethod, HttpRequest, HttpResponse, HttpStatus
 from chocs.middleware import Middleware, MiddlewareHandler
 
-from .cache_storage import CacheItem, ICacheStorage, generate_cache_id
+from .cache_storage import CacheItem, ICacheStorage, ICollectableCacheStorage, generate_cache_id
 from .http_support import load_response, dump_response, format_date_rfc_1123, parse_etag_value
 
 __all__ = ["CacheMiddleware"]
 
 
 class CacheMiddleware(Middleware):
-    def __init__(self, cache_storage: ICacheStorage, cache_vary: Tuple[str, ...] = ("accept", "accept-language")):
+    def __init__(
+        self,
+        cache_storage: ICacheStorage,
+        cache_vary: Tuple[str, ...] = ("accept", "accept-language"),
+        safe_methods: Tuple[HttpMethod, ...] = (HttpMethod.GET, HttpMethod.HEAD),
+        successful_responses: Tuple[HttpStatus, ...] = (HttpStatus.OK, HttpStatus.CREATED),
+    ):
         self._cache_vary = cache_vary
         self._cache_storage = cache_storage
+        self._safe_methods = safe_methods
+        self._successful_responses = successful_responses
 
     def handle(self, request: HttpRequest, next: MiddlewareHandler) -> HttpResponse:
         cache_expiry = request.route.attributes.get("cache_expiry", 0)
         cache_control = request.route.attributes.get("cache_control", "")
         cache_vary = request.route.attributes.get("cache_vary", tuple(self._cache_vary))
+        use_cache = cache_expiry > 0 or request.route.attributes.get("cache", False)
 
         assert isinstance(cache_vary, tuple)
 
-        if not cache_expiry:
+        if not use_cache:
             return next(request)
 
         # Generate cache_id
@@ -57,23 +67,26 @@ class CacheMiddleware(Middleware):
 
                 return cached_response
 
+        # If-none-match condition fails when item CAN BE retrieved from cache
         if "if-none-match" in request.headers:
             try:
-                # try to get the cached etag
+                # Try to retrieve item from cache
                 self._cache_storage.get(parse_etag_value(request.headers.get("if-none-match")))
 
                 # For methods that apply server-side changes, the status code 412 (Precondition Failed) is used.
                 if request.method in (HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.POST, HttpMethod.DELETE):
                     return HttpResponse(status=HttpStatus.PRECONDITION_FAILED)
 
-                # When the condition fails for GET and HEAD methods,
-                # then the server must return HTTP status code 304 (Not Modified).
+                # When the condition fails for GET and HEAD methods, then the server must return
+                # HTTP status code 304 (Not Modified). We return that when cache is still fresh.
                 if cache_item and not cache_item.is_expired and request.method in (HttpMethod.GET, HttpMethod.HEAD):
                     return self.create_etag_response_from_cache_item(cache_item)
 
             except Exception:
+                # When the exception occurs it means that if-none-match condition is fulfilled.
+
                 # For GET and HEAD methods, the server will return the requested resource, with a 200 status,
-                # only if it doesn't have an ETag matching the given ones
+                # only if it doesn't have an ETag matching the given ones.
 
                 # For other methods, the request will be processed only if the eventually existing resource's ETag
                 # doesn't match any of the values listed.
@@ -100,22 +113,45 @@ class CacheMiddleware(Middleware):
 
         if "vary" not in response.headers:
             response.headers["vary"] = ",".join(cache_vary)
-        else:
+
+        # If etag is not present in the response, but vary is being set we need to regenerate cache_id.
+        # And store cached response under the new id.
+        elif "etag" not in response.headers:
             cache_vary = response.headers.get("vary")
             if isinstance(cache_vary, str):
                 cache_vary = tuple([value.strip() for value in cache_vary.split(",")])
             cache_id = generate_cache_id(request, cache_vary)
+            if cache_id != cache_item.id:
+                cache_item = CacheItem.empty(cache_id)
 
         if "etag" in response.headers:
             cache_id = parse_etag_value(response.headers["etag"])
 
-        if not cache_item:
-            cache_item = CacheItem(cache_id, dump_response(response), cache_expiry)
-        else:
-            cache_item.body = dump_response(response)
-            cache_item.ttl = cache_expiry
+            # The cached item's id has changed, we should do the clean-up at this stage.
+            if (
+                "etag" in request.headers
+                and cache_item.id != cache_id
+                and isinstance(self._cache_storage, ICollectableCacheStorage)
+            ):
+                self._cache_storage.collect(cache_item)
 
-        self._cache_storage.set(cache_item)
+            # Update cache_id with the provided e-tag
+            cache_item._id = cache_id
+
+        cache_item.ttl = cache_expiry
+        cache_item.body = dump_response(response)
+
+        # If response wasn't successful or it is a head request we keep cache state unchanged.
+        if response.status_code not in self._successful_responses or request.method == HttpMethod.HEAD:
+            return response
+
+        # Store cache only for safe-methods
+        if request.method in self._safe_methods:
+            self._cache_storage.set(cache_item)
+
+        # Collect cache for unsafe-methods
+        elif isinstance(self._cache_storage, ICollectableCacheStorage):
+            self._cache_storage.collect(cache_item)
 
         return response
 

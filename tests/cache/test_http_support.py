@@ -1,7 +1,7 @@
 from datetime import datetime
 
 import pytest
-from chocs import HttpResponse, HttpStatus, HttpRequest, HttpMethod
+from chocs import HttpResponse, HttpStatus
 
 from chocs_middleware.cache.http_support import dump_response, load_response, format_date_rfc_1123, parse_etag_value
 

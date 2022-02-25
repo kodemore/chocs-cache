@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 from chocs import Application
 from chocs import HttpResponse, HttpStatus, HttpRequest, HttpMethod
 
-from chocs_middleware.cache import CacheMiddleware, InMemoryCacheStorage
-from chocs_middleware.cache.cache_storage import generate_cache_id, CacheItem
+from chocs_middleware.cache import CacheMiddleware, InMemoryCacheStorage, CollectableInMemoryCacheStorage
+from chocs_middleware.cache.cache_storage import CacheItem, generate_cache_id
 
 
 def test_can_skip_cache() -> None:
@@ -315,3 +315,92 @@ def test_can_fail_conditional_request_if_match_with_precondition_failure() -> No
 
     # then
     assert response.status_code == HttpStatus.PRECONDITION_FAILED
+
+
+def test_can_skip_caching_for_non_safe_methods() -> None:
+    # given
+    cache = InMemoryCacheStorage()
+    app = Application(CacheMiddleware(cache))
+
+    @app.post("/test", cache_expiry=10)
+    def create_test(req: HttpRequest) -> HttpResponse:
+        return HttpResponse("test")
+
+    # when
+    app(HttpRequest(HttpMethod.POST, "/test"))
+
+    # then
+    assert cache.is_empty
+
+
+def test_can_collect_stale_cache() -> None:
+    # given
+    cache = CollectableInMemoryCacheStorage()
+    app = Application(CacheMiddleware(cache))
+    controller_call_count = 0
+
+    @app.get("/test", cache_expiry=10)
+    def get_test(req: HttpRequest) -> HttpResponse:
+        nonlocal controller_call_count
+        controller_call_count += 1
+        return HttpResponse("test")
+
+    @app.delete("/test", cache=True)
+    def delete_test(req: HttpRequest) -> HttpResponse:
+        return HttpResponse()
+
+    # when
+    app(HttpRequest(HttpMethod.GET, "/test"))
+    app(HttpRequest(HttpMethod.GET, "/test"))
+
+    # then
+    assert controller_call_count == 1
+    assert len(cache) == 1
+    assert not cache.is_empty
+
+    # when
+    app(HttpRequest(HttpMethod.DELETE, "/test"))
+
+    # then
+    assert cache.is_empty
+
+
+def test_can_update_etag_in_cached_item() -> None:
+    # given
+    cache_storage = CollectableInMemoryCacheStorage()
+    app = Application(CacheMiddleware(cache_storage))
+    cache_item = CacheItem.empty("1")  # this is an expired item by default
+
+    @app.get("/test", cache_expiry=10)
+    def get_test(req: HttpRequest) -> HttpResponse:
+        return HttpResponse("test", headers={"etag": "2"})
+
+    # when
+    cache_storage.set(cache_item)
+    app(HttpRequest(HttpMethod.GET, "/test", headers={"etag": "1"}))
+
+    # then
+    assert cache_item.id == "2"
+    assert len(cache_storage) == 1
+
+
+def test_can_update_cache_id_for_new_vary_header() -> None:
+    # given
+    cache_storage = CollectableInMemoryCacheStorage()
+    app = Application(CacheMiddleware(cache_storage))
+    request = HttpRequest(HttpMethod.GET, "/test", headers={"x-a": "1", "x-b": "2"})
+    cache_id = generate_cache_id(request)
+    cache_item = CacheItem(cache_id, b"")
+
+    @app.get("/test", cache_expiry=10)
+    def get_test(req: HttpRequest) -> HttpResponse:
+        return HttpResponse("test", headers={"vary": "x-a, x-b"})
+
+    # when
+    cache_storage.set(cache_item)
+    app(request)
+
+    # then
+    new_cache = cache_storage.get(generate_cache_id(request, ("x-a", "x-b")))
+    assert len(cache_storage) == 2
+    assert isinstance(new_cache, CacheItem)

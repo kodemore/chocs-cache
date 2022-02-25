@@ -7,6 +7,7 @@ Cache middleware for chocs library.
 - Support for ETags
 - Support for conditional request headers `if-none-match`, `if-match`
 - Built-in in-memory cache storage for debugging and testing purposes
+- Automatic cache revalidation
 
 ## Installation
 
@@ -34,8 +35,9 @@ from chocs_middleware.cache import ICacheStorage, CacheItem, CacheMiddleware
 class MemoryCache(ICacheStorage):
     """
     Custom cache storage that uses memory to store the cache items.
-    In production this should use Redis or other cache database used by your application.
+    In production, this should use Redis or other cache databases used by your application.
     """
+
     def __init__(self):
         self._cache = {}
 
@@ -43,7 +45,7 @@ class MemoryCache(ICacheStorage):
         return self._cache[cache_id]
 
     def set(self, item: CacheItem) -> None:
-        self._cache[item.item_id] = item
+        self._cache[item.id] = item
 
 
 app = chocs.Application(CacheMiddleware(MemoryCache()))
@@ -61,7 +63,7 @@ def get_user(request: HttpRequest) -> HttpResponse:
 
 ## ETag based cache
 
-To make use of etags simply return etag header in the response, like in the example below:
+To make use of e-tags simply return the e-tag header in the response, like in the example below:
 
 ```python
 import chocs
@@ -78,12 +80,12 @@ def get_user(request: HttpRequest) -> HttpResponse:
     })
 ```
 
-> Keep in mind etag values MUST BE unique per REST endpoint and per content type to avoid cache collisions.
+> Keep in mind e-tag values MUST BE unique per REST endpoint and per content type to avoid cache collisions.
 
 ## Using cache vary
 
-To allow cache system better understand your intention it is recommended to use `cache_vary` attribute.
-You can read more about `Vary` header [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Vary)
+To allow the cache system better understand your intention it is recommended to use the `cache_vary` attribute.
+You can read more about the `Vary` header [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Vary)
 
 ```python
 import chocs
@@ -101,8 +103,8 @@ def get_user(request: HttpRequest) -> HttpResponse:
 
 ## Specifying cache control
 
-You can also specify type of cache by setting `cache_control` attribute to `public` or `private`.
-You can read more about cache control [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching#types_of_caches)
+You can also specify the type of cache by setting the `cache_control` attribute to `public` or `private`.
+You can read more about cache-control [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching#types_of_caches)
 
 ```python
 import chocs
@@ -121,7 +123,50 @@ def get_user(request: HttpRequest) -> HttpResponse:
 
 This cache system supports conditional requests headers [`if-none-match`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-None-Match) 
 and [`if-match`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Match) in a limited manner.
+This means values passed in `if-none-match` and `if-match` headers will be treated as a single value.
 
-> The limitation is about understanding values inside `if-none-match` and `if-match` headers.
-> Multiple etags passed in the mentioned headers will be treated as a single value.
+## Cache revalidation
 
+The middleware provides `ICollectableCache` interfaces that you can use to implement your  
+cache re-validation. It might be just a simple mechanism that just deletes the stale cache, but
+there are no limitations and more powerful systems might be built on the top of the interface.
+
+The following diagram represents the way how to cache revalidation works in the middleware:
+![Cache Revalidation](./docs/cache_revalidation.png)
+
+
+The following example shows the simplest implementation of cache re-validation:
+
+```python
+from chocs import Application, HttpRequest, HttpResponse
+from chocs_middleware.cache import ICollectableCacheStorage, CacheItem, CacheMiddleware
+
+
+class CacheStorage(ICollectableCacheStorage):
+    def __init__(self):
+        self._storage = {}
+
+    def set(self, item: CacheItem) -> None:
+        self._storage[item.id] = item
+
+    def get(self, item_id: str) -> CacheItem:
+        return self._storage[item_id]
+
+    def collect(self, item: CacheItem) -> None:
+        del self._storage[item.id]
+
+app = Application(CacheMiddleware(CacheStorage))
+
+@app.get("/users/{user_id}", cache_expiry=10)
+def get_test(req: HttpRequest) -> HttpResponse:
+    user_id = req.path_parameters.get("user_id")
+    return HttpResponse(f"user {user_id}", headers={"etag": f"{user_id}"})
+
+
+@app.patch("/users/{user_id}", cache=True)  # cache attribute enables cache middleware for the endpoint, to collect stale data
+def get_test(req: HttpRequest) -> HttpResponse:
+    """
+    Once this function generate a successful response and cache exists for the given user CacheStorage.collect is called
+    """
+    return HttpResponse("{user data}")
+```
